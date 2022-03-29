@@ -1,11 +1,12 @@
 # esxi-vm-backup
 
-A shell script for backing up VM snapshots from an ESXi host via SSH.
+Shell script for [ESXi](https://en.wikipedia.org/wiki/VMware_ESXi) for backing 
+up VM snapshots to remote storage via SSH.
 
 # In short
 
-This is a reworked fork of [ghettoVCB](https://github.com/lamw/ghettoVCB) script 
-by William Lam. For the background, general requirements and the setup see there.
+This is a substantially reworked fork of [ghettoVCB](https://github.com/lamw/ghettoVCB)
+script by William Lam. For the background, general requirements and the setup see there.
 
 The script does the following:
 
