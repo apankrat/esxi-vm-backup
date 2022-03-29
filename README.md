@@ -1,5 +1,6 @@
 # esxi-vm-backup
-Shell script for scp-ing VM snapshots off an ESXi host
+
+A shell script for backing up VM snapshots from an ESXi host via SSH.
 
 # In short
 
