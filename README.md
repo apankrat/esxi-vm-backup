@@ -1,9 +1,9 @@
-# esxi-vm-backup
+## esxi-vm-backup
 
 Shell script for [ESXi](https://en.wikipedia.org/wiki/VMware_ESXi) for backing 
 up VM snapshots to remote storage via SSH.
 
-# In short
+## In short
 
 This is a substantially reworked fork of [ghettoVCB](https://github.com/lamw/ghettoVCB)
 script by William Lam. For the background, general requirements and the setup see there.
@@ -29,7 +29,7 @@ a remote host **over SSH**.
 
 The SSH bit is **the** reason for this script's existence.
 
-# Caveats
+## Caveats
 
 There's no restore script (yet), but restoration is largely trivial.
 
@@ -45,7 +45,7 @@ Test again.
 
 If you found a bug, [open an issue](https://github.com/apankrat/esxi-vm-backup/issues/new).
 
-# Syntax
+## Syntax
 
 ```
 $ ./vm-backup.sh
@@ -61,7 +61,7 @@ Based on ghettoVCB by William Lam, https://github.com/lamw/ghettoVCB
 Reworked by Alexander Pankratov, https://github.com/apankrat/esxi-vm-backup
 ```
 
-# Typical run
+## Typical run
 
 ```
 $ ./vm-backup.sh -m "Le petit"
@@ -99,7 +99,7 @@ Can also be told to be verbose:
     
 in which case it will look something like this - [vm-backup-2020.03.29-19.55.49.log]
 
-# Changes from ghettoVCB
+## Changes from ghettoVCB
 
 Reworked and cleaned up the code a bit. In particular:
 
@@ -124,7 +124,7 @@ to properly port them over. These include:
 * Support for backing up VMs with existing snapshots
 * Logging of the storage info (probably will need to add it back at some point)
 
-# Note on using compression
+## Note on using compression
 
 Once local backup is created there are several options for moving it over
 the remote storage over SSH:
@@ -140,7 +140,7 @@ severly, but still very noticeably.
 
 **Keep in mind** that the only option actually implemented is `tar | ssh`.
 
-# Acknowledgment
+## Acknowledgment
 
 Kudos to William, the ghettoVCB author. For a change it was easier to rework 
 someone else's work than to rewrite it from scratch >_<
