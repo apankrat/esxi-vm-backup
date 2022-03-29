@@ -249,6 +249,21 @@ check_if_root() {
     fi
 }
 
+load_config() {
+
+    if [[ -z "${CONFIG_FILE}" ]] ; then
+        return
+    fi
+
+    if [[ ! -f "${CONFIG_FILE}" ]] ; then
+        logger "error" "Specified config file not found - ${CONFIG_FILE}"
+	exit 1
+    fi
+
+    logger "debug" "Loading ${CONFIG_FILE} ..."
+    source "${CONFIG_FILE}"
+}
+
 parse_args() {
 
     while getopts ":c:m:avw:" ARG; do
@@ -265,7 +280,7 @@ parse_args() {
             fi
 
             CONFIG_FILE="${OPTARG}"
-            source "${CONFIG_FILE}"
+            load_config
             ;;
         m)
             if [ -z "${OPTARG}" ]; then
@@ -803,7 +818,7 @@ vm_create_snapshot() {
     logger "debug" "  ${VIM_CMD} vmsvc/snapshot.create ${VM_ID} \"${VM_SNAPSHOT_NAME}\" \"\" \"${VM_SNAPSHOT_MEMORY}\" \"${VM_SNAPSHOT_QUIESCE}\""
     ${VIM_CMD} vmsvc/snapshot.create ${VM_ID} "${VM_SNAPSHOT_NAME}" "" "${VM_SNAPSHOT_MEMORY}" "${VM_SNAPSHOT_QUIESCE}" > /dev/null 2>&1
 
-    logger "debug" "  Waiting for completion ..."
+    logger "debug" "  RC $?, waiting for completion ..."
 
     CYCLE=0
     while [[ $(${VIM_CMD} vmsvc/snapshot.get ${VM_ID} | wc -l) -eq 1 ]] ; do
@@ -841,7 +856,7 @@ vm_delete_snapshot() {
     logger "debug" "  ${VIM_CMD} vmsvc/snapshot.remove ${VM_ID} ${SNAPSHOT_ID}"
     ${VIM_CMD} vmsvc/snapshot.remove ${VM_ID} ${SNAPSHOT_ID} > /dev/null 2>&1
 
-    logger "debug" "  Waiting for completion ..."
+    logger "debug" "  RC $?, waiting for completion ..."
 
     while ls "${VM_PATH}" | grep -q "\-delta\.vmdk"; do
         sleep 5
@@ -916,6 +931,8 @@ vm_clone_vdmks() {
         else
             eval ${VMKFSTOOLS} -i \"${VMDK_SRC}\" ${ADAPTER_FORMAT} ${VMDK_FORMAT} \"${VMDK_DST}\" > /dev/null 2>>"${LOG_FILE}"
         fi
+
+# get rid of eval ^ 
 
         if [[ $? -ne 0 ]] ; then
             logger "error" "  vmkfstools -i failed with [$?]"
@@ -1296,6 +1313,8 @@ STARTED_MAIN=$(date +%s)
 if [ $# -lt 1 ]; then syntax; fi # have args
 
 check_if_root
+
+load_config
 
 parse_args "$@"
 
