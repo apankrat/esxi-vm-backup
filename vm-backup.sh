@@ -98,10 +98,10 @@ EMAIL_USER_PASS=
 # Email FROM
 EMAIL_FROM="esxi-vm-backup@${EMAIL_SELFHOST}"
 
-# Comma seperated list of receiving email addresses
+# Comma separated list of receiving email addresses
 EMAIL_TO=
 
-# Comma seperated list of additional receiving email addresses if status is not "OK"
+# Comma separated list of additional receiving email addresses if status is not "OK"
 EMAIL_ERRORS_TO=
 
 # Email Delay Interval from NC (netcat) - default 1
