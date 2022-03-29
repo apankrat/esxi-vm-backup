@@ -1232,7 +1232,7 @@ send_email_to() {
 
 send_emails() {
 
-    if [ -z ${EMAIL_LOG} ]; then
+    if [[ ${EMAIL_LOG} -ne 1 ]]; then
         return
     fi
 
