@@ -1,6 +1,6 @@
 ## esxi-vm-backup
 
-Shell script for [ESXi](https://en.wikipedia.org/wiki/VMware_ESXi) for backing 
+A shell script for [ESXi](https://en.wikipedia.org/wiki/VMware_ESXi) that backs
 up VM snapshots to remote storage via SSH.
 
 ## In short
