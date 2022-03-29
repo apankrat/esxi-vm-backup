@@ -29,21 +29,21 @@ a remote host **over SSH**.
 
 The SSH bit is **the** reason for this script's existence.
 
-There's no restore script (yet), you will need to adapt ghettoVCB's one for that.
-
 # Caveats
 
-Used with one specific pair of ESXi boxes in my possession. There, it works flawlessly.
+There's no restore script (yet), but restoration is largely trivial.
+
+The script is used with one specific pair of ESXi boxes with spectacular results. *Your* mileage may vary.
 
 Before using - 
 * read through the code, at the very least the config section at the top of the script
 * try and understand what it actually does
 
-Test next. Test again.
+Test next.
 
-Found a bug - open an issue.
+Test again.
 
-Want a feature - implement it. If it's clean and glorious, submit a pull request.
+If you found a bug, [open an issue](https://github.com/apankrat/esxi-vm-backup/issues/new).
 
 # Syntax
 
