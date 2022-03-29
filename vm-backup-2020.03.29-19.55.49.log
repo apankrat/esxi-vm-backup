@@ -1,0 +1,93 @@
+2020-03-29 19:55:50 | 100202850 | info  | === New run 2020.03.29-19.55.49 ===
+2020-03-29 19:55:50 | 100202850 | info  | logfile: /tmp/vm-backup-2020.03.29-19.55.49.log
+2020-03-29 19:55:50 | 100202850 | info  | workdir: /vmfs/volumes/primary/vm-backup-workdir
+2020-03-29 19:55:50 | 100202850 | debug | /bin/vim-cmd vmsvc/getallvms ...
+2020-03-29 19:55:51 | 100202850 | debug | --- Setup ---
+2020-03-29 19:55:51 | 100202850 | debug |   config_file               -
+2020-03-29 19:55:51 | 100202850 | debug |   workdir                   /vmfs/volumes/primary/vm-backup-workdir
+2020-03-29 19:55:51 | 100202850 | debug |   workdir_keep              0
+2020-03-29 19:55:51 | 100202850 | debug |   run_timestamp             2020.03.29-19.55.49
+2020-03-29 19:55:51 | 100202850 | debug | logging
+2020-03-29 19:55:51 | 100202850 | debug |   log_file                  /tmp/vm-backup-2020.03.29-19.55.49.log
+2020-03-29 19:55:51 | 100202850 | debug |   verbose                   yes
+2020-03-29 19:55:51 | 100202850 | debug | esx
+2020-03-29 19:55:51 | 100202850 | debug |   version                   6.0.0
+2020-03-29 19:55:51 | 100202850 | debug |   release                   6.0.0
+2020-03-29 19:55:51 | 100202850 | debug | vm_list
+2020-03-29 19:55:51 | 100202850 | debug |   * Le petit
+2020-03-29 19:55:52 | 100202850 | debug | target
+2020-03-29 19:55:52 | 100202850 | debug |   rem_host                  10.0.0.123
+2020-03-29 19:55:52 | 100202850 | debug |   rem_root                  /vmfs/volumes/backups
+2020-03-29 19:55:52 | 100202850 | debug |   backup_rotations          2
+2020-03-29 19:55:52 | 100202850 | debug | power down
+2020-03-29 19:55:52 | 100202850 | debug |   power_down_vms            -
+2020-03-29 19:55:52 | 100202850 | debug |   power_down_hard_thresh    -
+2020-03-29 19:55:52 | 100202850 | debug |   power_down_timeout         min
+2020-03-29 19:55:52 | 100202850 | debug | snapshot
+2020-03-29 19:55:52 | 100202850 | debug |   snapshot_always           1
+2020-03-29 19:55:52 | 100202850 | debug |   snapshot_memory           1
+2020-03-29 19:55:52 | 100202850 | debug |   snapshot_quiesce          1
+2020-03-29 19:55:52 | 100202850 | debug |   snapshot_timeout          15 min
+2020-03-29 19:55:53 | 100202850 | debug | cloning
+2020-03-29 19:55:53 | 100202850 | debug |   vmdk_backup_format        zeroedthick
+2020-03-29 19:55:53 | 100202850 | debug | email
+2020-03-29 19:55:53 | 100202850 | debug |   enabled                   1
+2020-03-29 19:55:53 | 100202850 | debug |   server                    10.1.2.3
+2020-03-29 19:55:53 | 100202850 | debug |   port                      25
+2020-03-29 19:55:53 | 100202850 | debug |   username                  -
+2020-03-29 19:55:53 | 100202850 | debug |   password                  -
+2020-03-29 19:55:53 | 100202850 | debug |   from                      esxi-vm-backup@esxi-old
+2020-03-29 19:55:53 | 100202850 | debug |   to                        noc@iobureau.com
+2020-03-29 19:55:53 | 100202850 | debug |   to (errors)               -
+2020-03-29 19:55:53 | 100202850 | debug |   retry_pause               1
+2020-03-29 19:55:53 | 100202850 | debug | internals
+2020-03-29 19:55:54 | 100202850 | debug |   vim_cmd                   /bin/vim-cmd
+2020-03-29 19:55:54 | 100202850 | debug |   vmkfstools                /sbin/vmkfstools
+2020-03-29 19:55:54 | 100202850 | debug |   nc                        -
+2020-03-29 19:55:54 | 100202850 | debug |   new_vimcmd_snapshot       yes
+2020-03-29 19:55:54 | 100202850 | debug |   adaptertype_depricated    1
+2020-03-29 19:55:54 | 100202850 | debug | --- End of the setup ---
+2020-03-29 19:55:54 | 100202850 | info  | --- Backing up [Le petit] ---
+2020-03-29 19:55:54 | 100202850 | debug |   vm.id       11
+2020-03-29 19:55:54 | 100202850 | debug |   vm.volume   primary
+2020-03-29 19:55:54 | 100202850 | debug |   vm.path     /vmfs/volumes/primary/Le petit
+2020-03-29 19:55:54 | 100202850 | debug |   vm.vmx      /vmfs/volumes/primary/Le petit/Le petit.vmx
+2020-03-29 19:55:54 | 100202850 | debug |   vm.nvram    Le petit.nvram
+2020-03-29 19:55:55 | 100202850 | debug |   vm.power    Powered off
+2020-03-29 19:55:55 | 100202850 | info  | Listing vmdks ...
+2020-03-29 19:55:55 | 100202850 | debug |   ide1:0 -- skipped, fileName is emptyBackingString
+2020-03-29 19:55:55 | 100202850 | info  |   scsi0:0 -- included, 1 GB, /vmfs/volumes/primary/Le petit/Le petit.vmdk
+2020-03-29 19:55:55 | 100202850 | info  |   Total: 1 vmdk(s), 1 GB
+2020-03-29 19:55:55 | 100202850 | info  | Creating directory - [/vmfs/volumes/primary/vm-backup-workdir/Le petit/2020.03.29-19.55.49] ...
+2020-03-29 19:55:56 | 100202850 | info  | Creating snapshot - 'vm-backup-snapshot-2020-03-29' ...
+2020-03-29 19:55:56 | 100202850 | debug |   /bin/vim-cmd vmsvc/snapshot.create 11 "vm-backup-snapshot-2020-03-29" "" "1" "1"
+2020-03-29 19:55:58 | 100202850 | debug |   Waiting for completion ...
+2020-03-29 19:55:58 | 100202850 | info  | Copying vmx file ...
+2020-03-29 19:55:59 | 100202850 | info  | Cloning /vmfs/volumes/primary/Le petit/Le petit.vmdk ...
+2020-03-29 19:55:59 | 100202850 | debug |   /sbin/vmkfstools -i "/vmfs/volumes/primary/Le petit/Le petit.vmdk"  -d zeroedthick "/vmfs/volumes/primary/vm-backup-workdir/Le petit/2020.03.29-19.55.49/Le petit.vmdk"
+2020-03-29 19:56:00 | 100202850 | info  | Creating [/vmfs/volumes/backups/Le petit] on 10.0.0.123 ...
+2020-03-29 19:56:00 | 100202850 | debug |   ssh 10.0.0.123 mkdir -p "/vmfs/volumes/backups/Le petit"
+2020-03-29 19:56:00 | 100202850 | info  | Copying /vmfs/volumes/primary/vm-backup-workdir/Le petit/2020.03.29-19.55.49 ...
+2020-03-29 19:56:01 | 100202850 | info  |   -> 10.0.0.123:/vmfs/volumes/backups/Le petit/2020.03.29-19.55.49.tar
+2020-03-29 19:56:01 | 100202850 | debug |   tar -C "/vmfs/volumes/primary/vm-backup-workdir/Le petit/2020.03.29-19.55.49" -cvf - . | ssh 10.0.0.123 "cat > "/vmfs/volumes/backups/Le petit/2020.03.29-19.55.49.tar""
+2020-03-29 19:56:15 | 100202850 | info  | Trimming backup set, keeping 3 most recent ...
+2020-03-29 19:56:16 | 100202850 | info  |   2022.03.29-16.59.22.tar - kept
+2020-03-29 19:56:16 | 100202850 | info  |   2022.03.29-16.50.53.tar - kept
+2020-03-29 19:56:16 | 100202850 | info  |   2022.03.29-16.48.31.tar - kept
+2020-03-29 19:56:16 | 100202850 | info  |   2020.03.29-19.55.49.tar - removing ...
+2020-03-29 19:56:16 | 100202850 | debug |   ssh 10.0.0.123 rm "/vmfs/volumes/backups/Le petit/2020.03.29-19.55.49.tar"
+2020-03-29 19:56:17 | 100202850 | debug | Removing /vmfs/volumes/primary/vm-backup-workdir/Le petit/2020.03.29-19.55.49 ...
+2020-03-29 19:56:17 | 100202850 | info  | Removing snapshot - 'vm-backup-snapshot-2020-03-29' ...
+2020-03-29 19:56:17 | 100202850 | debug |   /bin/vim-cmd vmsvc/snapshot.remove 11 57
+2020-03-29 19:56:21 | 100202850 | debug |   Waiting for completion ...
+2020-03-29 19:56:21 | 100202850 | info  | --- End of backup of [Le petit] -- Completed OK in 00:00:27 ----
+2020-03-29 19:56:21 | 100202850 | info  | All backups are completed
+2020-03-29 19:56:21 | 100202850 | info  |   1 OK
+2020-03-29 19:56:21 | 100202850 | info  |   0 failed
+2020-03-29 19:56:21 | 100202850 | info  | Sending email...
+2020-03-29 19:56:21 | 100202850 | debug |   via 10.1.2.3:25
+2020-03-29 19:56:21 | 100202850 | debug |   to [noc@iobureau.com] ...
+2020-03-29 19:56:23 | 100202850 | debug | --- Cleaning up ---
+2020-03-29 19:56:23 | 100202850 | debug | Removing workdir...
+2020-03-29 19:56:24 | 100202850 | info  | === End of the run, elapsed 00:00:35, exit code 0 ===
+
