@@ -97,7 +97,7 @@ Can also be told to be verbose:
 
     $ ./vm-backup.sh -m "Le petit" -v
     
-in which case it will look something like this - [vm-backup-2020.03.29-19.55.49.log]
+in which case it will look something like this - [vm-backup-2020.03.29-19.55.49.log](https://raw.githubusercontent.com/apankrat/esxi-vm-backup/master/vm-backup-2020.03.29-19.55.49.log)
 
 ## Changes from ghettoVCB
 
@@ -106,7 +106,7 @@ Reworked and cleaned up the code a bit. In particular:
 * Split into functions so to avoid nested IF blocks
 * Reworked logging for consistency and columnized output
 * Reworked email notifications a bit
-* Exiting on signal now removes the VM snapshot if one was created
+* Exiting on signal now removes VM snapshot if one was created and not yet removed
 
 Changed how the script reacts to the errors *during the prep phase*. It now
 treats all configuration errors as fatal and aborts the run. During the main
@@ -134,8 +134,9 @@ the remote storage over SSH:
 
 Enabling **local** compression during the transfer slows things down
 **dramatically**, e.g. `scp -C` or `tar -z... | ssh` or `tar | ssh -C ...`
+will cause the run-time to double or triple.
 
-Enabling **remote** compression, post-transfer slows things down less
+Enabling **remote** (post-transfer) compression slows things down less
 severly, but still very noticeably.
 
 **Keep in mind** that the only option actually implemented is `tar | ssh`.
