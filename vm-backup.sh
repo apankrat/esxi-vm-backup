@@ -129,6 +129,7 @@ VMKFSTOOLS=
 NC_BIN=
 SSH='ssh'
 TAR='tar'
+IFS_DEFAULT="$IFS"
 
 ESX_VERSION=
 ESX_RELEASE=
@@ -175,6 +176,40 @@ VM_FAILED=0
 FINAL_STATUS=
 EXIT_STATUS=
 EXIT_CODE=123
+
+# We use nested "for ( .. in .. )" loops, each using
+# its own separator list and we also launch external
+# commands from these loops. To keep things tidy, 
+# here's a little helper api to save and restore
+# current IFS value pre- and post-loop respectively.
+
+IFS_DEFAULT="$IFS"
+IFS_STACK_POS=0
+
+ifs_push() {
+    case $IFS_STACK_POS in
+    0) IFS_STACK_0="$IFS"; IFS_STACK_POS=1 ;;
+    1) IFS_STACK_1="$IFS"; IFS_STACK_POS=2 ;;
+    2) IFS_STACK_2="$IFS"; IFS_STACK_POS=3 ;;
+    3) IFS_STACK_3="$IFS"; IFS_STACK_POS=4 ;;
+    4) IFS_STACK_4="$IFS"; IFS_STACK_POS=5 ;;
+    *) echo 'ifs_push overflow'; exit 1234 ;;
+    esac
+
+    if [[ "$1" == "" ]] ; then IFS="$IFS_DEFAULT"; else IFS="$1"; fi
+}
+
+ifs_pop() {
+    case $IFS_STACK_POS in
+    0) echo 'ifs_pop underflow'; exit 1234 ;;
+    1) IFS="$IFS_STACK_0"; IFS_STACK_POS=0 ;;
+    2) IFS="$IFS_STACK_1"; IFS_STACK_POS=1 ;;
+    3) IFS="$IFS_STACK_2"; IFS_STACK_POS=2 ;;
+    4) IFS="$IFS_STACK_3"; IFS_STACK_POS=3 ;;
+    5) IFS="$IFS_STACK_4"; IFS_STACK_POS=4 ;;
+    *) echo 'ifs_pop anomaly'; exit 1234
+    esac
+}
 
 ###################################################
 #                                                 #
@@ -257,7 +292,7 @@ load_config() {
 
     if [[ ! -f "${CONFIG_FILE}" ]] ; then
         logger "error" "Specified config file not found - ${CONFIG_FILE}"
-	exit 1
+        exit 1
     fi
 
     logger "debug" "Loading ${CONFIG_FILE} ..."
@@ -391,7 +426,7 @@ init_logger() {
     logger "info" "logfile: ${LOG_FILE}"
     logger "info" "workdir: ${WORKDIR}"
 
-    if [[ ${WORKDIR_KEEP} -eq 1 ]]; then
+    if [[ ${WORKDIR_KEEP} -eq 1 ]] ; then
         logger "info" "${WORKDIR} will ** not ** removed on exit"
     fi
 }
@@ -447,6 +482,11 @@ init_api() {
     VMSVC_GETALLVMS="${WORKDIR}/vmsvc-getallvms"
     logger "debug" "${VIM_CMD} vmsvc/getallvms ..."
     ${VIM_CMD} vmsvc/getallvms | fgrep 'vmx-' > ${VMSVC_GETALLVMS}
+
+    if [[ $? -ne 0 ]] ; then
+        logger "error" "Failed to get the list of all VMs - can't proceed"
+        exit 1
+    fi
 }
 
 require_email_var() {
@@ -459,7 +499,7 @@ require_email_var() {
 
 init_email() {
 
-    if [[ ${EMAIL_LOG} -eq 1 ]] ; then
+    if [[ ${EMAIL_LOG} -ne 1 ]] ; then
         return
     fi
 
@@ -493,7 +533,7 @@ init_email() {
 
     if [[ ! -z "${ESX5_OR_NEWER}" ]] ; then
         /sbin/esxcli network firewall ruleset rule list | awk -F'[ ]{2,}' '{print $5}' | grep "^${EMAIL_SERVER_PORT}$" > /dev/null 2>&1
-        if [[ $? -eq 1 ]] ; then
+        if [[ $? -ne 0 ]] ; then
             logger "error" "No firewall rule for email traffic on port ${EMAIL_SERVER_PORT} - can't send emails\n"
             exit 1
         fi
@@ -523,9 +563,11 @@ log_vm_list() {
     fi
 
     if [[ "$VM_LIST" != '' ]] ; then
-        IFS_SAVE=$IFS; IFS=$'\n'
-        for VM_NAME in ${VM_LIST}; do logger "debug" "  * ${VM_NAME}"; done
-        IFS=$IFS_SAVE
+        ifs_push $'\n'
+        for VM_NAME in ${VM_LIST}; do
+           logger "debug" "  * ${VM_NAME}";
+        done
+        ifs_pop
     fi
 }
 
@@ -605,6 +647,39 @@ init_vm_list() {
 #                                                 #
 ###################################################
 
+mk_log_proxies() {
+
+    if [[ ! -z ${LOG_VERBOSE} ]] ; then
+
+        STDOUT_PROXY="/tmp/vm-backup-stdout-pipe.$$"
+        rm -f "${STDOUT_PROXY}"
+        mkfifo "${STDOUT_PROXY}"
+        tee -a "${LOG_FILE}" < "${STDOUT_PROXY}" &
+    else
+        STDOUT_PROXY='/dev/null'
+    fi
+
+    STDERR_PROXY="/tmp/vm-backup-stderr-pipe.$$"
+    rm -f "${STDERR_PROXY}"
+    mkfifo "${STDERR_PROXY}"
+    tee -a "${LOG_FILE}" < "${STDERR_PROXY}" >&2 &
+
+    trap 'rm_log_proxies' 0
+}
+
+rm_log_proxies() {
+
+    if [[ -f "${STDOUT_PROXY}" ]] && [[ "${STDOUT_PROXY}" != '/dev/null' ]] ; then
+        rm "${STDOUT_PROXY}"
+    fi
+
+    if [[ -f "${STDERR_PROXY}" ]] ; then
+        rm "${STDERR_PROXY}"
+    fi
+}
+
+#
+
 get_vm_id_by_name() {
 
     VM_ID=$( cat "${VMSVC_GETALLVMS}" | fgrep "$1" | cut -d ' ' -f 1 )
@@ -628,6 +703,8 @@ vm_get_power_state() {
         VM_ERROR='vmsvc_power_getstate'
     fi
 }
+
+#
 
 vm_power_off() {
 
@@ -717,7 +794,7 @@ vm_get_vmdks() {
     VM_VMDKS_COUNT=0
     VM_VMDKS_INDEP=
 
-    IFS_SAVE=$IFS; IFS=$'\n'
+    ifs_push $'\n'
     for VMDK_DEV_ID in ${VMDK_LIST}; do
 
         # e.g "ide1:0" or "scsi0:0"
@@ -801,7 +878,7 @@ vm_get_vmdks() {
         logger "info" "  ${VMDK_DEV_ID} -- included, ${VMDK_SIZE} GB, ${VMDK_FILE}"
 
     done
-    IFS=$IFS_SAVE
+    ifs_pop
 
     logger "info" "  Total: ${VM_VMDKS_COUNT} vmdk(s), ${VM_VMDKS_SIZE} GB"
 }
@@ -813,25 +890,36 @@ vm_create_snapshot() {
 
     logger "info" "Creating snapshot - '${VM_SNAPSHOT_NAME}' ..."
 
-    # make sure these are '0' if not set
-
     logger "debug" "  ${VIM_CMD} vmsvc/snapshot.create ${VM_ID} \"${VM_SNAPSHOT_NAME}\" \"\" \"${VM_SNAPSHOT_MEMORY}\" \"${VM_SNAPSHOT_QUIESCE}\""
-    ${VIM_CMD} vmsvc/snapshot.create ${VM_ID} "${VM_SNAPSHOT_NAME}" "" "${VM_SNAPSHOT_MEMORY}" "${VM_SNAPSHOT_QUIESCE}" > /dev/null 2>&1
+
+    mk_log_proxies; ifs_push
+
+    ${VIM_CMD} vmsvc/snapshot.create ${VM_ID} "${VM_SNAPSHOT_NAME}" "" "${VM_SNAPSHOT_MEMORY}" "${VM_SNAPSHOT_QUIESCE}" 1>"${STDOUT_PROXY}" 2>"${STDERR_PROXY}"
+    RC=$?
+
+    ifs_pop; rm_log_proxies
+
+    if [[ $RC -ne 0 ]] ; then
+        logger "error" "  vim-cmd failed with $RC"
+        VM_ERROR='vm_snapshot'
+        return
+    fi
 
     logger "debug" "  RC $?, waiting for completion ..."
 
     CYCLE=0
+    CYCLE_MAX=$((VM_SNAPSHOT_TIMEOUT * 12))
     while [[ $(${VIM_CMD} vmsvc/snapshot.get ${VM_ID} | wc -l) -eq 1 ]] ; do
 
-        if [[ ${CYCLE} -ge ${VM_SNAPSHOT_TIMEOUT} ]] ; then
+        if [[ ${CYCLE} -ge ${CYCLE_MAX} ]] ; then
             logger "error" "  Timed out"
-            VM_ERROR='vm_snapshot'
+            VM_ERROR='vmsvc_snapshot_create'
             return
         fi
 
         CYCLE=$((CYCLE + 1))
-        logger "debug" "  Waiting ... ${CYCLE} / ${VM_SNAPSHOT_TIMEOUT}"
-        sleep 60
+        logger "debug" "  Waiting ... ${CYCLE} / ${CYCLE_MAX}"
+        sleep 5
     done
 
     VM_SNAPSHOT='ok'
@@ -854,10 +942,21 @@ vm_delete_snapshot() {
     VM_SNAPSHOT=
 
     logger "debug" "  ${VIM_CMD} vmsvc/snapshot.remove ${VM_ID} ${SNAPSHOT_ID}"
-    ${VIM_CMD} vmsvc/snapshot.remove ${VM_ID} ${SNAPSHOT_ID} > /dev/null 2>&1
+
+    mk_log_proxies; ifs_push
+
+    ${VIM_CMD} vmsvc/snapshot.remove ${VM_ID} ${SNAPSHOT_ID} 1>"${STDOUT_PROXY}" 2>"${STDERR_PROXY}"
+    RC=$?
+
+    ifs_pop; rm_log_proxies
+
+    if [[ $RC -ne 0 ]] ; then
+        logger "error" "  vim-cmd failed with $RC"
+        VM_ERROR='vmsvc_snapshot_remove'
+        return
+    fi
 
     logger "debug" "  RC $?, waiting for completion ..."
-
     while ls "${VM_PATH}" | grep -q "\-delta\.vmdk"; do
         sleep 5
     done
@@ -865,11 +964,13 @@ vm_delete_snapshot() {
 
 ###  cloning / copying  ###
 
+#
+
 vm_clone_vdmks() {
 
     VMDK_CLONE_ERROR=
 
-    IFS_SAVE=$IFS; IFS=':'
+    ifs_push ':'
     for VMDK_INFO in ${VM_VMDKS}; do
 
         VMDK=$(echo "${VMDK_INFO}" | awk -F "###" '{print $1}')
@@ -893,6 +994,7 @@ vm_clone_vdmks() {
         VMDK_SRC="${VMDK}"
         VMDK_DST="${VM_BACKUP_PATH}/${VMDK_SRC##*/}"
 
+        ADAPTER_FORMAT=
         VMDK_FORMAT="?"
 
         if [[ "${VMDK_CLONE_FORMAT}" == "zeroedthick" ]] ; then
@@ -926,22 +1028,21 @@ vm_clone_vdmks() {
 
         logger "debug" "  ${VMKFSTOOLS} -i \"${VMDK_SRC}\" ${ADAPTER_FORMAT} ${VMDK_FORMAT} \"${VMDK_DST}\""
 
-        if [[ ! -z ${LOG_VERBOSE} ]] ; then
-            eval ${VMKFSTOOLS} -i \"${VMDK_SRC}\" ${ADAPTER_FORMAT} ${VMDK_FORMAT} \"${VMDK_DST}\" 2>>"${LOG_FILE}"
-        else
-            eval ${VMKFSTOOLS} -i \"${VMDK_SRC}\" ${ADAPTER_FORMAT} ${VMDK_FORMAT} \"${VMDK_DST}\" > /dev/null 2>>"${LOG_FILE}"
-        fi
+        mk_log_proxies; ifs_push
 
-# get rid of eval ^ 
+        ${VMKFSTOOLS} -i "${VMDK_SRC}" ${ADAPTER_FORMAT} ${VMDK_FORMAT} "${VMDK_DST}" 1>"${STDOUT_PROXY}" 2>"${STDERR_PROXY}"
+        RC=$?
 
-        if [[ $? -ne 0 ]] ; then
-            logger "error" "  vmkfstools -i failed with [$?]"
+        ifs_pop; rm_log_proxies
+
+        if [[ $RC -ne 0 ]] ; then
+            logger "error" "  vmkfstools failed with $RC"
             VM_ERROR='vmkfstools_i'
             break
         fi
 
     done
-    IFS=$IFS_SAVE
+    ifs_pop
 }
 
 copy_to_remote() {
@@ -960,8 +1061,10 @@ copy_to_remote() {
 
     if [[ ! -z ${LOG_VERBOSE} ]] ; then
         ${TAR} -C "${VM_BACKUP_PATH}" -cvf - . | ${SSH} ${REM_HOST} "cat > \"${REM_FILE}.tar\" 2>>\"${LOG_FILE}\""
+        RC=$?
     else
         ${TAR} -C "${VM_BACKUP_PATH}" -cf - . | ${SSH} ${REM_HOST} "cat > \"${REM_FILE}.tar\" 2>>\"${LOG_FILE}\""
+        RC=$?
     fi
 
 #   REM_PATH_ESCAPED=$( echo "$REM_PATH" | sed 's/ /\\ /g' )
@@ -973,8 +1076,8 @@ copy_to_remote() {
 #   1:17:20    time ${TAR} -C "${VM_BACKUP_PATH}" -cvzf - . | ${SSH} ${REM_HOST} "cat > \"${REM_FILE}.tgz\""
 #   1:17:23    time ${TAR} -C "${VM_BACKUP_PATH}" -cvzf - . | ${SSH} -C ${REM_HOST} "cat > \"${REM_FILE}.tgz\""
 
-    if [[ $? -ne 0 ]] ; then
-        logger "info" "  Copying failed with $?\n"
+    if [[ $RC -ne 0 ]] ; then
+        logger "info" "  Copying failed with $RC\n"
         VM_ERROR='copy_to_remote'
     fi
 }
@@ -989,7 +1092,7 @@ remote_rotate() {
     ALL=$( ${SSH} ${REM_HOST} ls -t1 ${REM_PATH_ESCAPED}/*.tar )
     EXC=$( ${SSH} ${REM_HOST} ls -t1 ${REM_PATH_ESCAPED}/*.tar | head -n $RECENT )
 
-    IFS_SAVE=$IFS; IFS=$'\n'
+    ifs_push $'\n'
     for TAR in ${ALL} ; do
         for PRECIOUS in ${EXC} ; do
             if [[ "${TAR}" == "${PRECIOUS}" ]] ; then
@@ -1003,7 +1106,7 @@ remote_rotate() {
         logger "debug" "  ${SSH} ${REM_HOST} rm \"${TAR}\""
         ${SSH} ${REM_HOST} rm \"${TAR}\"
     done
-    IFS=$IFS_SAVE
+    ifs_pop
 
     return
 }
@@ -1152,7 +1255,7 @@ vm_backup() {
 
 backup_vms(){
 
-    IFS_SAVE=$IFS; IFS=$'\n'
+    ifs_push $'\n'
     for VM_NAME in ${VM_LIST}; do
 
         vm_backup
@@ -1163,7 +1266,7 @@ backup_vms(){
             VM_FAILED=$((VM_FAILED+1))
         fi
     done
-    IFS=$IFS_SAVE
+    ifs_pop
 
     logger "info" "All backups are completed"
     logger "info" "  ${VM_OK} OK"
@@ -1249,7 +1352,7 @@ send_email_to() {
 
 send_emails() {
 
-    if [[ ${EMAIL_LOG} -ne 1 ]]; then
+    if [[ ${EMAIL_LOG} -ne 1 ]] ; then
         return
     fi
 
@@ -1278,14 +1381,14 @@ send_emails() {
         fi
     fi
 
-    IFS_SAVE=$IFS; IFS=','
+    ifs_push ','
     for i in ${EMAIL_TO}; do send_email_to ${i}; done
-    IFS=$IFS_SAVE
+    ifs_pop
 }
 
 remove_workdir() {
 
-    if [[ ${WORKDIR_KEEP} -eq 0 ]]; then
+    if [[ ${WORKDIR_KEEP} -eq 0 ]] ; then
         logger "debug" "Removing workdir..."
         rm -rf "${WORKDIR}"
     else
