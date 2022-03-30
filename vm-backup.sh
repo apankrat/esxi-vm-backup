@@ -119,7 +119,6 @@ RUN_TIMESTAMP="$(date +%Y.%m.%d-%H.%M.%S)"
 
 LOG_FILE=
 LOG_FILE_CRLF=
-LOG_STDOUT=1
 LOG_VERBOSE=
 
 #
@@ -245,9 +244,7 @@ logger() {
     PID=$(printf "%5s" $$)
     FULL="$(date +%F" "%H:%M:%S) | ${PID} | ${LEVEL} | ${MSG}"
 
-    if [ ! -z "${LOG_STDOUT}" ] ; then
-        echo -e "${FULL}"
-    fi
+    echo -e "${FULL}"
 
     if [ -f "${LOG_FILE}" ] ; then
         echo -e "${FULL}" >> "${LOG_FILE}"
@@ -405,7 +402,6 @@ init_logger() {
 
     LOG_FILE="/tmp/vm-backup-${RUN_TIMESTAMP}.log"
     LOG_FILE_CRLF="${WORKDIR}/vm-backup-${RUN_TIMESTAMP}-crlf.log"
-    LOG_STDOUT=1
 
     touch "${LOG_FILE}"
     touch "${LOG_FILE_CRLF}"
@@ -417,7 +413,6 @@ init_logger() {
             FOO=${LOG_FILE}
             LOG_FILE=
             logger "error" "Failed to touch ${FOO} - file logging is switched off"
-            LOG_STDOUT=1 # force stdout
         fi
     fi
 
