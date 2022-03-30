@@ -6,7 +6,7 @@
 #                                                 #
 ###################################################
 
-VERSION_STRING="2022.03.29-20.01"
+VERSION_STRING="2022.03.30-21.15"
 
 ###################################################
 #                                                 #
@@ -20,7 +20,8 @@ VERSION_STRING="2022.03.29-20.01"
 CONFIG_FILE=
 
 # local temp folder with a lot of space
-WORKDIR="/vmfs/volumes/primary/vm-backup-workdir"
+# CHANGE THIS. /tmp is just a lazy default !
+WORKDIR="/tmp/vm-backup-workdir"
 
 # if _not_ to remote WORKDIR on script's completion
 # 1 for 'yes', 0 for 'no'
@@ -38,7 +39,7 @@ BACKUP_ROTATIONS=2
 
 #-- Shutdown guestOS prior to running backups and power them back on afterwards
 #-- This feature assumes VMware Tools are installed, else they will not power down and loop forever
-#-- 'no', 'yes', 'hard'
+#-- 2 for 'hard', 1 for 'soft' 0 for 'no'
 #-- POWER_DOWN_VM='no'
 
 #-- if the above flag "ENABLE_HARD_POWER_OFF "is set to 1, then will look at this flag which is the # of iterations
@@ -119,7 +120,7 @@ RUN_TIMESTAMP="$(date +%Y.%m.%d-%H.%M.%S)"
 
 LOG_FILE=
 LOG_FILE_CRLF=
-LOG_VERBOSE=
+LOG_VERBOSE=0
 
 #
 
@@ -128,13 +129,12 @@ VMKFSTOOLS=
 NC_BIN=
 SSH='ssh'
 TAR='tar'
-IFS_DEFAULT="$IFS"
 
 ESX_VERSION=
 ESX_RELEASE=
 
-ESX4_OR_NEWER=
-ESX5_OR_NEWER=
+ESX4_OR_NEWER=0
+ESX5_OR_NEWER=0
 
 NEW_VIMCMD_SNAPSHOT=
 ADAPTERTYPE_DEPRECATED=
@@ -143,14 +143,10 @@ VMSVC_GETALLVMS=
 
 #
 
-EMAIL_LOG_HEADER=
-EMAIL_LOG_OUTPUT=
-EMAIL_LOG_CONTENT=
-
-#
+JUST_LIST_VMS=0
 
 VM_LIST=''
-BACKUP_ALL='no'
+BACKUP_ALL=0
 
 VM_ID=
 VM_VOLUME=
@@ -170,17 +166,13 @@ VM_ERROR=
 VM_OK=0
 VM_FAILED=0
 
-#
-
-FINAL_STATUS=
-EXIT_STATUS=
 EXIT_CODE=123
 
-# We use nested "for ( .. in .. )" loops, each using
+# Code uses nested "for ( .. in .. )" loops, each using
 # its own separator list and we also launch external
-# commands from these loops. To keep things tidy, 
-# here's a little helper api to save and restore
-# current IFS value pre- and post-loop respectively.
+# commands from these loops. To keep things tidy, here
+# is a little helper api to save and restore current 
+# IFS value pre- and post-loop respectively.
 
 IFS_DEFAULT="$IFS"
 IFS_STACK_POS=0
@@ -218,11 +210,12 @@ ifs_pop() {
 
 syntax() {
 
-    echo "Syntax: $(basename $0) [-c config] [-w workdir] [-m vm-name] [-a] [-v]"
+    echo "Syntax: $(basename $0) [-c config] [-m vm-name] [-a] [-l] [-v]"
     echo
-    echo "   -m     Name of the VM to be backed up (can be repeated)"
+    echo "   -c     File with overrides for config options"
+    echo "   -m     Backup VM with specified name (can be repeated)"
     echo "   -a     Backup all VMs on this host (overrides -m)"
-    echo "   -c     File with overrides for default config options"
+    echo "   -l     List all VMs on this host (overrides -m and -a)"
     echo "   -v     Verbose logging"
     echo
     echo "Based on ghettoVCB by William Lam, https://github.com/lamw/ghettoVCB"
@@ -234,9 +227,9 @@ syntax() {
 logger() {
 
     LOG_TYPE=$1
-    MSG=$2
+    MSG="$2"
 
-    if [[ ${LOG_TYPE} == 'debug' ]] && [[ -z ${LOG_VERBOSE} ]] ; then
+    if [[ ${LOG_TYPE} == 'debug' ]] && [[ ${LOG_VERBOSE} -ne 1 ]] ; then
         return
     fi
 
@@ -259,7 +252,6 @@ calc_elapsed() {
 
     NOW=$(date +%s)
     SEC=$(echo $((NOW - $1)))
-#   ELAPSED=$(TZ=UTC0 printf '%(%H:%M:%S)T\n' $SEC)
 
     SS=$(printf "%02d" $((SEC % 60)))
     MM=$(printf "%02d" $((SEC / 60 % 60)))
@@ -298,15 +290,15 @@ load_config() {
 
 parse_args() {
 
-    while getopts ":c:m:avw:" ARG; do
+    while getopts ":c:m:avlw:" ARG; do
         case $ARG in
         c)
-            if [ -z "${OPTARG}" ]; then
+            if [ -z "${OPTARG}" ] ; then
                 logger "error" "-$ARG parameter is missing"
                 exit 1
             fi
 
-            if [ ! -f "${OPTARG}" ]; then
+            if [ ! -f "${OPTARG}" ] ; then
                 logger "error" "specified config file '${OPTARG}' not found"
                 exit 1
             fi
@@ -315,7 +307,7 @@ parse_args() {
             load_config
             ;;
         m)
-            if [ -z "${OPTARG}" ]; then
+            if [ -z "${OPTARG}" ] ; then
                 logger "error" "-$ARG parameter is missing"
                 exit 1
             fi
@@ -325,12 +317,16 @@ parse_args() {
             logger "debug" "vm_list <- [${OPTARG}]"
             ;;
 
-        a)  BACKUP_ALL='yes'
+        a)  BACKUP_ALL=1
             logger "debug" "backup_all -> 1"
             ;;
 
-        v)  LOG_VERBOSE='yes'
-            logger "debug" "log_verbose -> [${LOG_VERBOSE}]"
+        v)  LOG_VERBOSE=1
+            logger "debug" "log_verbose -> 1"
+            ;;
+
+        l)  JUST_LIST_VMS=1
+            logger "debug" "just_list_vms -> 1"
             ;;
 
         *)
@@ -345,7 +341,7 @@ parse_args() {
 check_bool_flag() {
 
     if [[ "$1" != '0' ]] && [[ "$1" != '1' ]] ; then
-        logger "error" "$2 setting is not 0 or 1"
+        logger "error" "$2 setting is neither 0 nor 1"
         exit 1
     fi
 }
@@ -362,16 +358,16 @@ check_config() {
         exit 1
     fi
 
-    if [[ "${VM_LIST}" == '' ]] && [[ "${BACKUP_ALL}" != 'yes' ]] ; then
+    if [[ "${VM_LIST}" == '' ]] && [[ ${BACKUP_ALL} -ne 1 ]] && [[ ${JUST_LIST_VMS} -ne 1 ]] ; then
         logger "error" "No VM specified (-m) and no (-a) argument -- can't proceed"
         exit 1
     fi
 
-    check_bool_flag  "${WORKDIR_KEEP}"          "WORKDIR_KEEP"
-    check_bool_flag  "${VM_SNAPSHOT_ALWAYS}"    "VM_SNAPSHOT_ALWAYS"
-    check_bool_flag  "${VM_SNAPSHOT_MEMORY}"    "VM_SNAPSHOT_MEMORY"
-    check_bool_flag  "${VM_SNAPSHOT_QUIESCE}"   "VM_SNAPSHOT_QUIESCE"
-    check_bool_flag  "${EMAIL_LOG}"             "EMAIL_LOG"
+    check_bool_flag  "${WORKDIR_KEEP}"         "WORKDIR_KEEP"
+    check_bool_flag  "${VM_SNAPSHOT_ALWAYS}"   "VM_SNAPSHOT_ALWAYS"
+    check_bool_flag  "${VM_SNAPSHOT_MEMORY}"   "VM_SNAPSHOT_MEMORY"
+    check_bool_flag  "${VM_SNAPSHOT_QUIESCE}"  "VM_SNAPSHOT_QUIESCE"
+    check_bool_flag  "${EMAIL_LOG}"            "EMAIL_LOG"
 }
 
 init_workdir() {
@@ -406,14 +402,9 @@ init_logger() {
     touch "${LOG_FILE}"
     touch "${LOG_FILE_CRLF}"
 
-    #
-
-    if [ ! -z "${LOG_FILE}" ] ; then
-        if ! touch ${LOG_FILE} 2>/dev/null ; then
-            FOO=${LOG_FILE}
-            LOG_FILE=
-            logger "error" "Failed to touch ${FOO} - file logging is switched off"
-        fi
+    if ! touch ${LOG_FILE} 2>/dev/null ; then
+        logger "error" "Failed to touch ${FOO} - file logging is switched off"
+        LOG_FILE=
     fi
 
     logger "info" "=== New run ${RUN_TIMESTAMP} ==="
@@ -446,8 +437,8 @@ init_api() {
     ESX_VERSION=$(vmware -v | awk '{print $3}')
     ESX_RELEASE=$(uname -r)
 
-    ESX4_OR_NEWER=
-    ESX5_OR_NEWER=
+    ESX4_OR_NEWER=0
+    ESX5_OR_NEWER=0
 
     case "${ESX_VERSION}" in
         7.0.0|7.0.1|7.0.2|7.0.3) ESX_VER_MAJOR=7; ESX4_OR_NEWER=1; ESX5_OR_NEWER=1 ;;
@@ -455,9 +446,7 @@ init_api() {
         5.0.0|5.1.0|5.5.0)       ESX_VER_MAJOR=5; ESX4_OR_NEWER=1; ESX5_OR_NEWER=1 ;;
         4.0.0|4.1.0)             ESX_VER_MAJOR=4; ESX4_OR_NEWER=1; ;;
         3.5.0|3i)                ESX_VER_MAJOR=3; ;;
-        *)
-            logger "error" "Unsupported ESX/i version";
-            exit 1;
+        *)                       logger "error" "Unsupported ESX/i version"; exit 1;
     esac
 
     NEW_VIMCMD_SNAPSHOT="no"
@@ -468,7 +457,7 @@ init_api() {
 #
 #   if [[ "${VMDK_CLONE_FORMAT}" == "2gbsparse" ]] && [[ ! -z "${ESX5_OR_NEWER}" ]] ; then
 #       esxcli system module list | grep multiextent > /dev/null 2>&1
-#       if [ $? -eq 1 ]; then
+#       if [ $? -eq 1 ] ; then
 #           logger "info" "multiextent VMkernel module is not loaded & is required for 2gbsparse, enabling ..."
 #           esxcli system module load -m multiextent
 #       fi
@@ -484,10 +473,17 @@ init_api() {
     fi
 }
 
+init_vm_list() {
+
+    if [[ ${BACKUP_ALL} -eq 1 ]] || [[ ${JUST_LIST_VMS} -eq 1 ]] ; then
+        VM_LIST=$( cat "${VMSVC_GETALLVMS}" | cut -c 4- | cut -d '[' -f 1 | sed 's/^ \+//g' | sed 's/ \+$//g' )
+    fi
+}
+
 require_email_var() {
 
-    if [[ -z "$2" ]] ; then
-        logger "error" "Email alerts enabled but $1 is not set"
+    if [[ -z "$1" ]] ; then
+        logger "error" "Email alerts enabled but $2 is not set"
         exit 1
     fi
 }
@@ -500,15 +496,15 @@ init_email() {
 
     # sanity checks
 
-    if [[ -z "$EMAIL_SELFHOST" ]] ; then
+    if [[ "$EMAIL_SELFHOST" == "" ]] ; then
         EMAIL_SELFHOST="$(hostname -s)"
     fi
 
-    require_email_var "EMAIL_SELFHOST" ${EMAIL_SELFHOST}
-    require_email_var "EMAIL_SERVER" ${EMAIL_SERVER}
-    require_email_var "EMAIL_SERVER_PORT" ${EMAIL_SERVER_PORT}
-    require_email_var "EMAIL_FROM" ${EMAIL_FROM}
-    require_email_var "EMAIL_TO" ${EMAIL_TO}
+    require_email_var  "${EMAIL_SELFHOST}"     "EMAIL_SELFHOST"
+    require_email_var  "${EMAIL_SERVER}"       "EMAIL_SERVER"
+    require_email_var  "${EMAIL_SERVER_PORT}"  "EMAIL_SERVER_PORT"
+    require_email_var  "${EMAIL_FROM}"         "EMAIL_FROM"
+    require_email_var  "${EMAIL_TO}"           "EMAIL_TO"
 
     # find nc
 
@@ -518,15 +514,14 @@ init_email() {
         elif [[ -f /bin/nc ]] ; then
             NC_BIN=/bin/nc
         fi
-    elif [ ! -z ${EMAIL_LOG} ]; then
-        EMAIL_LOG=0
+    else
         logger "error" "Failed to find 'nc' - can't send emails"
         exit 1
     fi
 
     # check firewall
 
-    if [[ ! -z "${ESX5_OR_NEWER}" ]] ; then
+    if [[ ${ESX5_OR_NEWER} -eq 1 ]] ; then
         /sbin/esxcli network firewall ruleset rule list | awk -F'[ ]{2,}' '{print $5}' | grep "^${EMAIL_SERVER_PORT}$" > /dev/null 2>&1
         if [[ $? -ne 0 ]] ; then
             logger "error" "No firewall rule for email traffic on port ${EMAIL_SERVER_PORT} - can't send emails\n"
@@ -539,7 +534,7 @@ log_var() {
 
     KEY=$1
     VAL=$2
-    if [ -z "$VAL" ]; then VAL='-'; fi
+    if [[ "$VAL" == "" ]] ; then VAL='-'; fi
     WHAT=$(printf "  %-24s  %s" "$KEY" "$VAL")
     logger "debug" "$WHAT"
 }
@@ -548,16 +543,16 @@ log_vm_list() {
 
     logger "debug" "vm_list"
 
-    if [[ "$VM_LIST" == '' ]] ; then
+    if [[ "${VM_LIST}" == '' ]] ; then
         logger "debug" "  <none> !"
         return
     fi
 
-    if [[ "$BACKUP_ALL" == 'yes' ]] ; then
+    if [[ ${BACKUP_ALL} -eq 1 ]] ; then
         logger "debug" "  <all>"
     fi
 
-    if [[ "$VM_LIST" != '' ]] ; then
+    if [[ "${VM_LIST}" != '' ]] ; then
         ifs_push $'\n'
         for VM_NAME in ${VM_LIST}; do
            logger "debug" "  * ${VM_NAME}";
@@ -568,7 +563,7 @@ log_vm_list() {
 
 dump_setup() {
 
-    if [[ -z ${LOG_VERBOSE} ]] ; then
+    if [[ ${LOG_VERBOSE} -ne 1 ]] ; then
         return
     fi
 
@@ -611,7 +606,7 @@ dump_setup() {
     logger  "debug" "email"
     log_var "enabled"                 "${EMAIL_LOG}"
     log_var "server"                  "${EMAIL_SERVER}"
-    log_var "port"                    "${EMAIL_SERVER_PORT}"
+    log_var "server port"             "${EMAIL_SERVER_PORT}"
     log_var "username"                "${EMAIL_USER_NAME}"
     log_var "password"                "${EMAIL_USER_PASS}"
     log_var "from"                    "${EMAIL_FROM}"
@@ -629,13 +624,6 @@ dump_setup() {
     logger  "debug" "--- End of the setup ---"
 }
 
-init_vm_list() {
-
-    if [[ "${BACKUP_ALL}" == 'yes' ]] ; then
-        VM_LIST=$( cat "${VMSVC_GETALLVMS}" | cut -c 4- | cut -d '[' -f 1 | sed 's/^ \+//g' | sed 's/ \+$//g' )
-    fi
-}
-
 ###################################################
 #                                                 #
 #                   Backup code                   #
@@ -644,7 +632,7 @@ init_vm_list() {
 
 mk_log_proxies() {
 
-    if [[ ! -z ${LOG_VERBOSE} ]] ; then
+    if [[ ${LOG_VERBOSE} -eq 1 ]] ; then
 
         STDOUT_PROXY="/tmp/vm-backup-stdout-pipe.$$"
         rm -f "${STDOUT_PROXY}"
@@ -677,13 +665,13 @@ rm_log_proxies() {
 
 get_vm_id_by_name() {
 
-    VM_ID=$( cat "${VMSVC_GETALLVMS}" | fgrep "$1" | cut -d ' ' -f 1 )
+    VM_ID=$( cat "${VMSVC_GETALLVMS}" | fgrep "${VM_NAME}" | cut -d ' ' -f 1 )
 }
 
 get_vmx_by_name() {
 
-    VM_VOLUME=$( cat "${VMSVC_GETALLVMS}" | fgrep "$1" | cut -d '[' -f 2 | cut -d ']' -f 1 )
-    _VMX_CONF=$( cat "${VMSVC_GETALLVMS}" | fgrep "$1" | cut -d ']' -f 2 | sed 's/^ \+//g' | sed -e 's/   .*$//' )
+    VM_VOLUME=$( cat "${VMSVC_GETALLVMS}" | fgrep "${VM_NAME}" | cut -d '[' -f 2 | cut -d ']' -f 1 )
+    _VMX_CONF=$( cat "${VMSVC_GETALLVMS}" | fgrep "${VM_NAME}" | cut -d ']' -f 2 | sed 's/^ \+//g' | sed -e 's/   .*$//' )
 
     VMX_FILE="/vmfs/volumes/${VM_VOLUME}/${_VMX_CONF}"
     VM_PATH=$(dirname "${VMX_FILE}")
@@ -711,7 +699,7 @@ vm_power_off() {
 #-- ${VIM_CMD} vmsvc/power.shutdown ${VM_ID} > /dev/null 2>&1
 #-- while ${VIM_CMD} vmsvc/power.getstate ${VM_ID} | grep -i "Powered on" > /dev/null 2>&1; do
 #--     #enable hard power off code
-#--     if [[ "${POWER_DOWN_VM}" == 'hard' ]] ; then
+#--     if [[ "${POWER_DOWN_VM}" -eq 2 ]] ; then
 #--         if [[ ${START_ITERATION} -ge ${POWER_DOWN_HARD_THRESHOLD} ]] ; then
 #--             logger "info" "Hard power off occured for ${VM_NAME}, waited for $((POWER_DOWN_HARD_THRESHOLD*60)) seconds"
 #--             ${VIM_CMD} vmsvc/power.off ${VM_ID} > /dev/null 2>&1
@@ -773,7 +761,7 @@ get_vmdk_size() {
     VMDK_SECTORS=
     VMDK_SIZE=
 
-    if [ -f "${VMDK_FILE}" ]; then
+    if [ -f "${VMDK_FILE}" ] ; then
         VMDK_SECTORS=$(cat "${VMDK_FILE}" 2> /dev/null | grep "VMFS" | grep ".vmdk" | awk '{ print $2 }')
         VMDK_SIZE=$(echo "${VMDK_SECTORS}" | awk '{printf "%.0f\n",$1*512/1024/1024/1024}')
     fi
@@ -993,7 +981,7 @@ vm_clone_vdmks() {
         VMDK_FORMAT="?"
 
         if [[ "${VMDK_CLONE_FORMAT}" == "zeroedthick" ]] ; then
-            if [[ ! -z "${ESX4_OR_NEWER}" ]] ; then
+            if [[ ${ESX4_OR_NEWER} -eq 1 ]] ; then
                 VMDK_FORMAT="-d zeroedthick"
             else
                 VMDK_FORMAT=""
@@ -1003,7 +991,7 @@ vm_clone_vdmks() {
         elif [[ "${VMDK_CLONE_FORMAT}" == "thin" ]] ; then
             VMDK_FORMAT="-d thin"
         elif [[ "${VMDK_CLONE_FORMAT}" == "eagerzeroedthick" ]] ; then
-            if [[ ! -z "${ESX4_OR_NEWER}" ]] ; then
+            if [[ ${ESX4_OR_NEWER} -eq 1 ]] ; then
                 VMDK_FORMAT="-d eagerzeroedthick"
             else
                 VMDK_FORMAT=""
@@ -1018,7 +1006,7 @@ vm_clone_vdmks() {
 
         # clone !
 
-        [[ -z "$ADAPTERTYPE_DEPRECATED" ]] && ADAPTER_FORMAT=$(grep -i "ddb.adapterType" "${VMDK_SRC}" | awk -F "=" '{ print $2 }' | sed -e 's/^[[:blank:]]*//;s/[[:blank:]]*$//;s/"//g')
+        [[ -z "${ADAPTERTYPE_DEPRECATED}" ]] && ADAPTER_FORMAT=$(grep -i "ddb.adapterType" "${VMDK_SRC}" | awk -F "=" '{ print $2 }' | sed -e 's/^[[:blank:]]*//;s/[[:blank:]]*$//;s/"//g')
         [[ -n "${ADAPTER_FORMAT}" ]] && ADAPTER_FORMAT="-a ${ADAPTER_FORMAT}"
 
         logger "debug" "  ${VMKFSTOOLS} -i \"${VMDK_SRC}\" ${ADAPTER_FORMAT} ${VMDK_FORMAT} \"${VMDK_DST}\""
@@ -1054,7 +1042,7 @@ copy_to_remote() {
 
     logger "debug" "  ${TAR} -C \"${VM_BACKUP_PATH}\" -cvf - . | ${SSH} ${REM_HOST} \"cat > \"${REM_FILE}.tar\"\""
 
-    if [[ ! -z ${LOG_VERBOSE} ]] ; then
+    if [[ ${LOG_VERBOSE} -eq 1 ]] ; then
         ${TAR} -C "${VM_BACKUP_PATH}" -cvf - . | ${SSH} ${REM_HOST} "cat > \"${REM_FILE}.tar\" 2>>\"${LOG_FILE}\""
         RC=$?
     else
@@ -1121,7 +1109,7 @@ vm_backup_inner() {
     VM_BACKUP_PATH=
 
     # name -> id
-    get_vm_id_by_name $VM_NAME
+    get_vm_id_by_name
     if [[ "${VM_ID}" == '' ]] ; then
         logger "error" "Failed to determine VM's ID"
         VM_ERROR='get_vm_id_by_name'
@@ -1129,7 +1117,7 @@ vm_backup_inner() {
     fi
 
     # name -> path
-    get_vmx_by_name $VM_NAME
+    get_vmx_by_name
     if [[ "${VM_VOLUME}" == '' ]] || [[ "${VMX_FILE}" == '' ]] || [[ "${VM_PATH}" == '' ]] ; then
         logger "error" "Failed to determine VM location"
         VM_ERROR='get_vmx_by_name'
@@ -1148,7 +1136,7 @@ vm_backup_inner() {
     # see if it's up
     vm_get_power_state
 
-    [[ ! -z "${VM_ERROR}" ]] && return
+    [[ "${VM_ERROR}" != "" ]] && return
 
     logger "debug" "  vm.power    ${VM_POWER}"
 
@@ -1173,9 +1161,9 @@ vm_backup_inner() {
     fi
 
     # power down the vm if specified
-#   if [[ "${VM_POWER}" != "Powered off" ]] && [[ ${POWER_DOWN_VM} == 'yes' ]] ; then
+#   if [[ "${VM_POWER}" != "Powered off" ]] && [[ ${POWER_DOWN_VM} -ne 0 ]] ; then
 #       vm_power_off
-#       [[ ! -z "${VM_ERROR}" ]] && return
+#       [[ "${VM_ERROR}" != "" ]] && return
 #   fi
 
     # snapshot the vm if it's up
@@ -1183,7 +1171,7 @@ vm_backup_inner() {
 
         vm_create_snapshot
 
-        [[ ! -z "${VM_ERROR}" ]] && return
+        [[ "${VM_ERROR}" != "" ]] && return
     fi
 
     # copy peanuts
@@ -1206,15 +1194,15 @@ vm_backup_inner() {
 
     # clone disks
     vm_clone_vdmks
-    [[ ! -z "${VM_ERROR}" ]] && return
+    [[ "${VM_ERROR}" != "" ]] && return
 
     #
     copy_to_remote
-    [[ ! -z "${VM_ERROR}" ]] && return
+    [[ "${VM_ERROR}" != "" ]] && return
 
     #
     remote_rotate
-    [[ ! -z "${VM_ERROR}" ]] && return
+    [[ "${VM_ERROR}" != "" ]] && return
 }
 
 vm_backup() {
@@ -1226,7 +1214,7 @@ vm_backup() {
     vm_backup_inner
 
     # remove local backup files unless keeping the workdir
-    if [[ -d "${VM_BACKUP_PATH}" ]] && [[ ! -z "${WORKDIR_KEEP}" ]] ; then
+    if [[ -d "${VM_BACKUP_PATH}" ]] && [[ "${WORKDIR_KEEP}" -ne 1 ]] ; then
         logger "debug" "Removing ${VM_BACKUP_PATH} ..."
         rm -rf "${VM_BACKUP_PATH}"
     fi
@@ -1235,15 +1223,15 @@ vm_backup() {
     vm_delete_snapshot
 
     # power back up
-#   if [[ -z "${VM_POWERED_DOWN} "]] ; then
+#   if [[ ${VM_POWERED_DOWN} -eq 1 ]] ; then
 #       vm_power_on
-#       [[ ! -z "${VM_ERROR}" ]] && return
+#       [[ "${VM_ERROR}" != "" ]] && return
 #   fi
 
     calc_elapsed $STARTED_VM_BACKUP
 
     RESULT='Completed OK'
-    [[ ! -z "$VM_ERROR" ]] && RESULT='FAILED'
+    [[ "$VM_ERROR" != "" ]] && RESULT='FAILED'
 
     logger "info" "--- End of backup of [${VM_NAME}] -- ${RESULT} in ${ELAPSED} ----"
 }
@@ -1255,7 +1243,7 @@ backup_vms(){
 
         vm_backup
 
-        if [[ -z ${VM_ERROR} ]] ; then
+        if [[ "${VM_ERROR}" == "" ]] ; then
             VM_OK=$((VM_OK+1))
         else
             VM_FAILED=$((VM_FAILED+1))
@@ -1297,7 +1285,7 @@ prep_email_transcript() {
     EMAIL_TRANSCRIPT="${WORKDIR}/vm-backup-email-transcript-$$"
 
     echo -ne "HELO ${EMAIL_SELFHOST}\r\n" > "${EMAIL_TRANSCRIPT}"
-    if [[ ! -z "${EMAIL_USER_NAME}" ]] ; then
+    if [[ "${EMAIL_USER_NAME}" != "" ]] ; then
         echo -ne "EHLO ${EMAIL_SELFHOST}\r\n" >> "${EMAIL_TRANSCRIPT}"
         echo -ne "AUTH LOGIN\r\n" >> "${EMAIL_TRANSCRIPT}"
         echo -ne "$(echo -n "${EMAIL_USER_NAME}" | openssl base64 2>&1 | tail -1)\r\n" >> "${EMAIL_TRANSCRIPT}"
@@ -1383,7 +1371,7 @@ send_emails() {
 
 remove_workdir() {
 
-    if [[ ${WORKDIR_KEEP} -eq 0 ]] ; then
+    if [[ ${WORKDIR_KEEP} -ne 1 ]] ; then
         logger "debug" "Removing workdir..."
         rm -rf "${WORKDIR}"
     else
@@ -1402,13 +1390,49 @@ clean_up() {
 
 ###################################################
 #                                                 #
+#                   not backup                    #
+#                                                 #
+###################################################
+
+just_list_vms() {
+
+    if [[ ${JUST_LIST_VMS} -ne 1 ]] ; then
+        return
+    fi
+
+    if [[ "${VM_LIST}" == "" ]] ; then
+        logger "info" "** No VMs found **"
+    else
+        logger "info" "------+----------------------------------------"
+        logger "info" "  ID  |  VM name"
+        logger "info" "------+----------------------------------------"
+
+        ifs_push $'\n'
+        for VM_NAME in ${VM_LIST}; do
+           get_vm_id_by_name
+           logger "info" "$(printf "%4s" ${VM_ID})  |  ${VM_NAME}"
+        done
+        ifs_pop
+
+        logger "info" "------+----------------------------------------"
+    fi
+
+    clean_up
+
+    logger "info" "=== End of the run ===\n"
+
+    exit 0
+}
+
+###################################################
+#                                                 #
 #                      main()                     #
 #                                                 #
 ###################################################
 
 STARTED_MAIN=$(date +%s)
 
-if [ $# -lt 1 ]; then syntax; fi # have args
+if [ $# -lt 1 ] ; then syntax; fi # have args
 
 check_if_root
 
@@ -1424,9 +1448,11 @@ init_logger
 
 init_api
 
-init_email
+init_vm_list  # if backing up all of them
 
-init_vm_list # if backing up all of them
+just_list_vms # delay not
+
+init_email
 
 dump_setup
 
