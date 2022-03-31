@@ -50,11 +50,12 @@ If you found a bug, [open an issue](https://github.com/apankrat/esxi-vm-backup/i
 ```
 $ ./vm-backup.sh
 
-Syntax: vm-backup.sh [-c config] [-w workdir] [-m vm-name] [-a] [-v]
+Syntax: vm-backup.sh [-c config] [-m vm-name] [-a] [-l] [-v]
 
-   -m     Name of the VM to be backed up (can be repeated)
+   -c     File with overrides for config options
+   -m     Backup VM with specified name (can be repeated)
    -a     Backup all VMs on this host (overrides -m)
-   -c     File with overrides for default config options
+   -l     List all VMs on this host (overrides -m and -a)
    -v     Verbose logging
 
 Based on ghettoVCB by William Lam, https://github.com/lamw/ghettoVCB
