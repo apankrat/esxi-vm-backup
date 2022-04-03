@@ -6,7 +6,7 @@
 #                                                 #
 ###################################################
 
-VERSION_STRING="2022.03.30-21.15"
+VERSION_STRING="2022.04.03-15.45"
 
 ###################################################
 #                                                 #
@@ -104,6 +104,9 @@ EMAIL_TO=
 
 # Comma separated list of additional receiving email addresses if status is not "OK"
 EMAIL_ERRORS_TO=
+
+# Subject of alert, appended with "-- OK / Failed"
+EMAIL_SUBJECT=
 
 # Email Delay Interval from NC (netcat) - default 1
 EMAIL_RETRY_PAUSE=1
@@ -284,7 +287,7 @@ load_config() {
         exit 1
     fi
 
-    logger "debug" "Loading ${CONFIG_FILE} ..."
+    logger "info" "Loading ${CONFIG_FILE} ..."
     source "${CONFIG_FILE}"
 }
 
@@ -500,6 +503,10 @@ init_email() {
         EMAIL_SELFHOST="$(hostname -s)"
     fi
 
+    if [[ "$EMAIL_SUBJECT" == "" ]] ; then
+        EMAIL_SUBJECT="vm-backup.sh on ${EMAIL_SELFHOST}"
+    fi
+
     require_email_var  "${EMAIL_SELFHOST}"     "EMAIL_SELFHOST"
     require_email_var  "${EMAIL_SERVER}"       "EMAIL_SERVER"
     require_email_var  "${EMAIL_SERVER_PORT}"  "EMAIL_SERVER_PORT"
@@ -552,18 +559,21 @@ log_vm_list() {
         logger "debug" "  <all>"
     fi
 
-    if [[ "${VM_LIST}" != '' ]] ; then
-        ifs_push $'\n'
-        for VM_NAME in ${VM_LIST}; do
-           logger "debug" "  * ${VM_NAME}";
-        done
-        ifs_pop
-    fi
+    ifs_push $'\n'
+    for VM_NAME in ${VM_LIST}; do logger "debug" "  * ${VM_NAME}"; done
+    ifs_pop
 }
 
 dump_setup() {
 
     if [[ ${LOG_VERBOSE} -ne 1 ]] ; then
+
+        # just the vm_list
+
+	LEFT="vm_list:"
+        ifs_push $'\n'
+        for VM_NAME in ${VM_LIST}; do logger "info" "${LEFT} ${VM_NAME}"; LEFT="        "; done
+        ifs_pop
         return
     fi
 
@@ -612,6 +622,7 @@ dump_setup() {
     log_var "from"                    "${EMAIL_FROM}"
     log_var "to"                      "${EMAIL_TO}"
     log_var "to (errors)"             "${EMAIL_ERRORS_TO}"
+    log_var "subject"                 "${EMAIL_SUBJECT}"
     log_var "retry_pause"             "${EMAIL_RETRY_PAUSE}"
 
     logger  "debug" "internals"
@@ -634,10 +645,11 @@ mk_log_proxies() {
 
     if [[ ${LOG_VERBOSE} -eq 1 ]] ; then
 
-        STDOUT_PROXY="/tmp/vm-backup-stdout-pipe.$$"
-        rm -f "${STDOUT_PROXY}"
-        mkfifo "${STDOUT_PROXY}"
-        tee -a "${LOG_FILE}" < "${STDOUT_PROXY}" &
+       STDOUT_PROXY="/tmp/vm-backup-stdout-pipe.$$"
+       rm -f "${STDOUT_PROXY}"
+       mkfifo "${STDOUT_PROXY}"
+#      tee -a "${LOG_FILE}" < "${STDOUT_PROXY}" &
+       cat < "${STDOUT_PROXY}" &
     else
         STDOUT_PROXY='/dev/null'
     fi
@@ -1076,18 +1088,18 @@ remote_rotate() {
     EXC=$( ${SSH} ${REM_HOST} ls -t1 ${REM_PATH_ESCAPED}/*.tar | head -n $RECENT )
 
     ifs_push $'\n'
-    for TAR in ${ALL} ; do
+    for HMM in ${ALL} ; do
         for PRECIOUS in ${EXC} ; do
-            if [[ "${TAR}" == "${PRECIOUS}" ]] ; then
-                logger "info" "  $(basename "$TAR") - kept"
+            if [[ "${HMM}" == "${PRECIOUS}" ]] ; then
+                logger "info" "  $(basename "$HMM") - kept"
                 continue 2
             fi
         done
 
         logger "info" "  $(basename "$TAR") - removing ..."
 
-        logger "debug" "  ${SSH} ${REM_HOST} rm \"${TAR}\""
-        ${SSH} ${REM_HOST} rm \"${TAR}\"
+        logger "debug" "  ${SSH} ${REM_HOST} rm \"${HMM}\""
+        ${SSH} ${REM_HOST} rm \"${HMM}\"
     done
     ifs_pop
 
@@ -1272,12 +1284,18 @@ prep_email_transcript() {
 
     EMAIL_ADDRESS=$1
 
-    if [[ $VM_OK != 0 ]] && [[ $VM_FAILED == 0 ]] ; then
-        EXEC_SUMMARY='backed up OK'
+    # single vm
+    if [[ $VM_OK == 1 ]] && [[ $VM_FAILED == 0 ]] ; then
+        EXEC_SUMMARY='OK'
+    elif [[ $VM_OK == 0 ]] && [[ $VM_FAILED == 1 ]] ; then
+        EXEC_SUMMARY='FAILED'
+    # multiple vm
+    elif [[ $VM_OK != 0 ]] && [[ $VM_FAILED == 0 ]] ; then
+        EXEC_SUMMARY='all OK'
     elif [[ $VM_OK != 0 ]] && [[ $VM_FAILED != 0 ]] ; then
-        EXEC_SUMMARY='some backups FAILED'
+        EXEC_SUMMARY="$VM_FAILED FAILED, $VM_OK OK"
     elif [[ $VM_OK == 0 ]] && [[ $VM_FAILED != 0 ]] ; then
-        EXEC_SUMMARY='all backups FAILED'
+        EXEC_SUMMARY='all FAILED'
     else
         EXEC_SUMMARY='empty run, no VMs specified'
     fi
@@ -1297,7 +1315,7 @@ prep_email_transcript() {
     echo -ne "DATA\r\n" >> "${EMAIL_TRANSCRIPT}"
     echo -ne "From: ${EMAIL_FROM}\r\n" >> "${EMAIL_TRANSCRIPT}"
     echo -ne "To: ${EMAIL_ADDRESS}\r\n" >> "${EMAIL_TRANSCRIPT}"
-    echo -ne "Subject: vm-backup on ${EMAIL_SELFHOST} - ${EXEC_SUMMARY}\r\n" >> "${EMAIL_TRANSCRIPT}"
+    echo -ne "Subject: ${EMAIL_SUBJECT} - ${EXEC_SUMMARY}\r\n" >> "${EMAIL_TRANSCRIPT}"
     echo -ne "Date: $( date +"%a, %d %b %Y %T %z" )\r\n" >> "${EMAIL_TRANSCRIPT}"
     echo -ne "Message-Id: <$( date -u +%Y%m%d%H%M%S ).$( dd if=/dev/urandom bs=6 count=1 2>/dev/null | hexdump -e '/1 "%02X"' )@${EMAIL_SELFHOST}>\r\n" >> "${EMAIL_TRANSCRIPT}"
     echo -ne "XMailer: vm-backup ${VERSION_STRING}\r\n" >> "${EMAIL_TRANSCRIPT}"
